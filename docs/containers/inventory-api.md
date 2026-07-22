@@ -39,6 +39,14 @@ The Go packages generated from these specs live under `internal/resourcesapi/` a
 `internal/costsapi/` (the `internal/<domain>api/` convention; **not implemented in this
 POC** — the specs are the reviewable design artifact).
 
+**Known consumer (cross-repo).** The Costs domain has a downstream consumer in a peer repo:
+[CloudWatchr](https://github.com/dewrich/cloudwatchr) reads `/costs/rollups/by-service` and
+`/costs/daily` (with a `costs:view` token) to alert when spend crosses budget thresholds — see
+its [Alerter](https://github.com/dewrich/cloudwatchr/blob/main/docs/containers/alerter.md). The
+`costs/v1` OpenAPI document is therefore a **published contract**, not just an internal artifact:
+breaking it breaks CloudWatchr, so version it via `X-Api-Version`. This edge is also recorded
+under [Downstream consumers](../context/index.md#downstream-consumers).
+
 ## Responsibilities
 
 - **Read-only.** The API never writes inventory; it queries a read replica of
