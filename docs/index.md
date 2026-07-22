@@ -14,3 +14,11 @@ CLI, the [Inventory API](containers/inventory-api.md), and the
 Collector. New here? Read
 [How Our Documentation is Organized](reference/how-our-documentation-is-organized/index.md)
 for the C4 × Divio scheme these docs follow.
+
+## Related systems
+
+CloudLedger is the upstream half of a two-repo pair with
+[**CloudWatchr**](https://github.com/dewrich/cloudwatchr) — a spend-alerting system that reads
+CloudLedger's Costs API and fires alerts when expenses run too high. CloudLedger owns the cost
+data; CloudWatchr owns the rules and alerts. The dependency is one-way (CloudWatchr → CloudLedger)
+and recorded on both sides — see [Downstream consumers](context/index.md#downstream-consumers).

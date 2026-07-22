@@ -6,6 +6,12 @@ system: cloudledger
 owner: platform-eng
 tags: [aws, inventory, finops, batch]
 relations: []          # system relations are derived from its containers' edges
+consumers:             # downstream systems that read this one (reciprocal, cross-repo edges)
+  - system: cloudwatchr
+    via: cloudledger/inventory-api   # Costs domain
+    kind: reads
+    desc: Reads the Costs API to alert when spend crosses budget thresholds
+    repo: https://github.com/dewrich/cloudwatchr
 ---
 
 # CloudLedger — system (C4 L1 Context)
@@ -36,6 +42,21 @@ The system talks *through* one internal contract and out to several external AWS
   [Cost Explorer](../externals/aws-cost-explorer.md).
 - **Identity external:** [AWS Cognito](../externals/aws-cognito.md) — issues the tokens the
   API validates and the Mobile UI logs in against.
+
+## Downstream consumers
+
+CloudLedger is the upstream half of a two-repo pair. Other systems **read** it through the
+Inventory API; the dependency points **toward** CloudLedger, never out of it.
+
+| Consumer | Repo | Reads | Via |
+|---|---|---|---|
+| **CloudWatchr** | [dewrich/cloudwatchr](https://github.com/dewrich/cloudwatchr) | Costs domain (`/costs/rollups/by-service`, `/costs/daily`) to alert when spend runs too high | [Inventory API](../containers/inventory-api.md) — the only sanctioned read path |
+
+CloudWatchr owns no cost data of its own; it evaluates CloudLedger's spend against budget rules.
+See CloudWatchr's reciprocal view of this boundary in its
+[system context](https://github.com/dewrich/cloudwatchr/blob/main/docs/context/index.md#related-systems)
+and the [external node](https://github.com/dewrich/cloudwatchr/blob/main/docs/externals/cloudledger-costs-api.md)
+that models this API on its side.
 
 > **POC scope.** This is the initial-phases design: three containers, five AWS collectors,
 > one database. It is documentation-first — the design is meant to be reviewed and
