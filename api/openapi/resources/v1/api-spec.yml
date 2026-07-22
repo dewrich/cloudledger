@@ -1,0 +1,183 @@
+# CloudLedger Resources domain API — source of truth for codegen + Swagger UI.
+# Follows the OpenAPI-first Go API framework layout: api/openapi/<domain>/v1/api-spec.yml ->
+# `make gen ACTION=api` -> internal/resourcesapi/ (Fiber server + models via oapi-codegen).
+# Member services mount under path prefixes on one domain server.
+openapi: 3.0.3
+info:
+  title: CloudLedger Resources Domain API
+  description: |
+    The CloudLedger Resources domain — the read surface over the AWS inventory the
+    Collector aggregates into Postgres. Read-only: this API never mutates an AWS resource.
+
+      * /resources — resourcesapi (EC2 · S3 · RDS · Lambda inventory)
+  version: 1.0.0
+  contact:
+    name: CloudLedger
+    url: https://github.com/dewrich/archdocs-poc
+servers:
+- url: '{scheme}://{host}:{port}'
+  description: resources (local)
+  variables:
+    scheme: { default: http, enum: [http, https] }
+    host: { default: localhost }
+    port: { default: '9080' }
+security:
+- bearerAuth: []
+tags:
+- name: resources:resources
+- name: resources:accounts
+
+paths:
+  /resources/resources:
+    get:
+      tags: [resources:resources]
+      summary: List inventory resources
+      operationId: resources_listResources
+      description: >
+        The aggregated AWS resources, newest sweep first. Filter by `service`,
+        `account_id`, `region`, or a free-text `q` matched against name and ARN.
+        Excludes soft-deleted rows unless `include_deleted=true`.
+      security:
+      - bearerAuth: [resources:view]
+      parameters:
+      - $ref: '#/components/parameters/XApiVersion'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - name: service
+        in: query
+        required: false
+        description: Only resources for this AWS service.
+        schema: { type: string, enum: [ec2, s3, rds, lambda] }
+      - name: account_id
+        in: query
+        required: false
+        schema: { type: integer, format: int64 }
+      - name: region
+        in: query
+        required: false
+        schema: { type: string }
+      - name: q
+        in: query
+        required: false
+        description: Case-insensitive substring matched against name and ARN.
+        schema: { type: string }
+      - name: include_deleted
+        in: query
+        required: false
+        schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: A page of resources.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResourcePage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /resources/resources/{arn}:
+    get:
+      tags: [resources:resources]
+      summary: Get one resource by ARN
+      operationId: resources_getResource
+      security:
+      - bearerAuth: [resources:view]
+      parameters:
+      - $ref: '#/components/parameters/XApiVersion'
+      - name: arn
+        in: path
+        required: true
+        description: URL-encoded canonical AWS ARN.
+        schema: { type: string }
+      responses:
+        '200':
+          description: The resource.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Resource' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /resources/accounts:
+    get:
+      tags: [resources:accounts]
+      summary: List swept AWS accounts
+      operationId: resources_listAccounts
+      security:
+      - bearerAuth: [resources:view]
+      parameters:
+      - $ref: '#/components/parameters/XApiVersion'
+      responses:
+        '200':
+          description: The configured accounts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Account' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Cognito-issued JWT; scopes gate each operation.
+  parameters:
+    XApiVersion:
+      name: X-Api-Version
+      in: header
+      required: false
+      schema: { type: string, default: '1' }
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, format: int32, minimum: 1, default: 1 }
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      schema: { type: integer, format: int32, minimum: 1, maximum: 200, default: 50 }
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: No such resource.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Account:
+      type: object
+      required: [id, aws_account_id, name]
+      properties:
+        id: { type: integer, format: int64 }
+        aws_account_id: { type: string, example: '123456789012' }
+        name: { type: string }
+    Resource:
+      type: object
+      required: [arn, service, resource_type, region, collected_at]
+      properties:
+        arn: { type: string }
+        account_id: { type: integer, format: int64 }
+        service: { type: string, enum: [ec2, s3, rds, lambda] }
+        resource_type: { type: string, example: instance }
+        region: { type: string, example: us-east-1 }
+        name: { type: string, nullable: true }
+        tags: { type: object, additionalProperties: { type: string } }
+        attributes: { type: object, description: Service-specific shape, preserved verbatim. }
+        collected_at: { type: string, format: date-time }
+        deleted_at: { type: string, format: date-time, nullable: true }
+    ResourcePage:
+      type: object
+      required: [items, page, page_size, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Resource' } }
+        page: { type: integer, format: int32 }
+        page_size: { type: integer, format: int32 }
+        total: { type: integer, format: int64 }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }

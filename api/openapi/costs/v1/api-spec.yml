@@ -1,0 +1,154 @@
+# CloudLedger Costs domain API — source of truth for codegen + Swagger UI.
+# Follows the OpenAPI-first Go API framework layout: api/openapi/<domain>/v1/api-spec.yml ->
+# `make gen ACTION=api` -> internal/costsapi/ (Fiber server + models via oapi-codegen).
+openapi: 3.0.3
+info:
+  title: CloudLedger Costs Domain API
+  description: |
+    The CloudLedger Costs domain — daily AWS spend the Cost Collector pulls from Cost
+    Explorer, rolled up by service, account, and day. Read-only.
+
+      * /costs — costsapi (daily spend · service & account rollups)
+  version: 1.0.0
+  contact:
+    name: CloudLedger
+    url: https://github.com/dewrich/archdocs-poc
+servers:
+- url: '{scheme}://{host}:{port}'
+  description: costs (local)
+  variables:
+    scheme: { default: http, enum: [http, https] }
+    host: { default: localhost }
+    port: { default: '9081' }
+security:
+- bearerAuth: []
+tags:
+- name: costs:daily
+- name: costs:rollups
+
+paths:
+  /costs/daily:
+    get:
+      tags: [costs:daily]
+      summary: List daily cost rows
+      operationId: costs_listDaily
+      description: >
+        Daily unblended + amortized spend. Filter by `account_id`, `service`, and a
+        `from`/`to` date window (inclusive). Defaults to the last 30 days.
+      security:
+      - bearerAuth: [costs:view]
+      parameters:
+      - $ref: '#/components/parameters/XApiVersion'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - name: account_id
+        in: query
+        required: false
+        schema: { type: integer, format: int64 }
+      - name: service
+        in: query
+        required: false
+        description: Cost Explorer SERVICE dimension, e.g. 'Amazon EC2'.
+        schema: { type: string }
+      - name: from
+        in: query
+        required: false
+        schema: { type: string, format: date }
+      - name: to
+        in: query
+        required: false
+        schema: { type: string, format: date }
+      responses:
+        '200':
+          description: A page of daily cost rows.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CostDailyPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /costs/rollups/by-service:
+    get:
+      tags: [costs:rollups]
+      summary: Total spend grouped by service
+      operationId: costs_rollupByService
+      description: Sums amortized spend by AWS service over the given date window.
+      security:
+      - bearerAuth: [costs:view]
+      parameters:
+      - $ref: '#/components/parameters/XApiVersion'
+      - name: from
+        in: query
+        required: false
+        schema: { type: string, format: date }
+      - name: to
+        in: query
+        required: false
+        schema: { type: string, format: date }
+      responses:
+        '200':
+          description: One total per service.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CostRollup' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Cognito-issued JWT; scopes gate each operation.
+  parameters:
+    XApiVersion:
+      name: X-Api-Version
+      in: header
+      required: false
+      schema: { type: string, default: '1' }
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, format: int32, minimum: 1, default: 1 }
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      schema: { type: integer, format: int32, minimum: 1, maximum: 200, default: 50 }
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    CostDaily:
+      type: object
+      required: [account_id, service, usage_date, unblended_usd, amortized_usd]
+      properties:
+        account_id: { type: integer, format: int64 }
+        service: { type: string, example: Amazon EC2 }
+        usage_date: { type: string, format: date }
+        unblended_usd: { type: number, format: double }
+        amortized_usd: { type: number, format: double }
+        collected_at: { type: string, format: date-time }
+    CostDailyPage:
+      type: object
+      required: [items, page, page_size, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/CostDaily' } }
+        page: { type: integer, format: int32 }
+        page_size: { type: integer, format: int32 }
+        total: { type: integer, format: int64 }
+    CostRollup:
+      type: object
+      required: [service, amortized_usd]
+      properties:
+        service: { type: string }
+        amortized_usd: { type: number, format: double }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }

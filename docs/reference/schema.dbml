@@ -1,0 +1,62 @@
+// CloudLedger — Inventory DB schema (DBML)
+// Hand-authored, versioned, diffs meaningfully in PRs (chosen over SchemaSpy).
+// Rendered by https://dbdiagram.io or `dbml2sql`. This is the design artifact for
+// docs/contracts/inventory-db.md — the Collector writes it, the Inventory API reads a replica.
+
+Project cloudledger {
+  database_type: 'PostgreSQL'
+  Note: 'AWS resource + cost inventory. System-of-record; single writer (Collector).'
+}
+
+// One row per AWS account CloudLedger is configured to sweep.
+Table account {
+  id            bigint       [pk, increment]
+  aws_account_id varchar(12) [not null, unique, note: '12-digit AWS account number']
+  name          varchar      [not null]
+  role_arn      varchar      [not null, note: 'read-only role the Collector assumes']
+  created_at    timestamptz  [not null, default: `now()`]
+
+  Indexes {
+    aws_account_id [unique]
+  }
+}
+
+// One row per AWS resource, across all services. The common columns are shared;
+// service-specific fields live in the JSONB `attributes` blob so a new collector
+// adds a `service` value without a schema migration.
+Table resource {
+  id            bigint       [pk, increment]
+  arn           varchar      [not null, unique, note: 'canonical AWS ARN — the natural key for upsert']
+  account_id    bigint       [not null, ref: > account.id]
+  service       varchar      [not null, note: "'ec2' | 's3' | 'rds' | 'lambda'"]
+  resource_type varchar      [not null, note: "e.g. 'instance', 'volume', 'bucket', 'db-instance', 'function'"]
+  region        varchar      [not null, note: "AWS region, or 'global' for S3 bucket listing"]
+  name          varchar
+  tags          jsonb        [not null, default: `'{}'`, note: 'AWS resource tags as key/value']
+  attributes    jsonb        [not null, default: `'{}'`, note: 'service-specific shape, preserved verbatim']
+  collected_at  timestamptz  [not null, note: 'sweep time — freshness signal for the API']
+  deleted_at    timestamptz  [note: 'soft delete: set when a sweep no longer sees the ARN']
+
+  Indexes {
+    (account_id, service, region)
+    service
+    (deleted_at) [note: 'partial index WHERE deleted_at IS NULL for the live inventory']
+  }
+}
+
+// One row per (account, service, day). Written by the Cost collector only.
+// Separate grain from `resource` — cost is a time series, not an object.
+Table cost_daily {
+  id             bigint      [pk, increment]
+  account_id     bigint      [not null, ref: > account.id]
+  service        varchar     [not null, note: "Cost Explorer SERVICE dimension, e.g. 'Amazon EC2'"]
+  usage_date     date        [not null]
+  unblended_usd  numeric(18,6) [not null, default: 0]
+  amortized_usd  numeric(18,6) [not null, default: 0]
+  collected_at   timestamptz [not null]
+
+  Indexes {
+    (account_id, service, usage_date) [unique, note: 'upsert key']
+    usage_date
+  }
+}
