@@ -16,3 +16,9 @@ CLI, the [Inventory API](docs/containers/inventory-api.md), and the
 Collector. New here? Read
 [How Our Documentation is Organized](docs/reference/how-our-documentation-is-organized/index.md)
 for the C4 × Divio scheme these docs follow.
+
+<!-- archdocs:openapi:begin -->
+## API Reference
+
+- [API index](api/openapi/README.md) — every OpenAPI spec in this repo, rendered.
+<!-- archdocs:openapi:end -->
