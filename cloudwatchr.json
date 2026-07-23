@@ -1,0 +1,193 @@
+{
+  "schema_version": "1",
+  "repo": "dewrich/cloudwatchr",
+  "system": "cloudwatchr",
+  "nodes": [
+    {
+      "doc_path": "context/index.md",
+      "id": "cloudwatchr",
+      "kind": "system",
+      "name": "CloudWatchr",
+      "owner": "observability-eng",
+      "relations": [
+        {
+          "desc": "Reads aggregated AWS spend from CloudLedger's Costs domain API to evaluate budget rules",
+          "kind": "reads",
+          "tech": "HTTPS / REST (costs:view) — cross-repo, see externals/cloudledger-costs-api.md",
+          "to": "cloudledger"
+        }
+      ],
+      "source_path": "docs/context/index.md",
+      "source_repo": "dewrich/cloudwatchr",
+      "system": "cloudwatchr",
+      "tags": [
+        "finops",
+        "alerting",
+        "monitoring",
+        "batch"
+      ]
+    },
+    {
+      "doc_path": "containers/alerter.md",
+      "id": "cloudwatchr/alerter",
+      "kind": "container",
+      "name": "Alerter",
+      "owner": "observability-eng",
+      "relations": [
+        {
+          "desc": "Pulls spend rollups and daily cost rows to evaluate against budget rules (cross-repo)",
+          "kind": "reads",
+          "tech": "HTTPS / REST — GET /costs/rollups/by-service, /costs/daily (costs:view)",
+          "to": "ext/cloudledger-costs-api"
+        },
+        {
+          "desc": "Obtains a bearer token with costs:view so CloudLedger's API accepts the call",
+          "kind": "uses",
+          "tech": "Cognito client-credentials / OIDC",
+          "to": "ext/aws-cognito"
+        },
+        {
+          "desc": "Reads active rules; writes fired/cleared alert state (idempotent per rule × window)",
+          "kind": "writes",
+          "tech": "pgx",
+          "to": "cloudwatchr/alert-state-db"
+        }
+      ],
+      "source_path": "docs/containers/alerter.md",
+      "source_repo": "dewrich/cloudwatchr",
+      "system": "cloudwatchr",
+      "tags": [
+        "batch",
+        "finops",
+        "evaluation"
+      ],
+      "tech": "Go 1.23 / ECS Scheduled Task (EventBridge cron, every 15 min)"
+    },
+    {
+      "doc_path": "containers/notifier.md",
+      "id": "cloudwatchr/notifier",
+      "kind": "container",
+      "name": "Notifier",
+      "owner": "observability-eng",
+      "relations": [
+        {
+          "desc": "Reads newly fired/cleared alerts to deliver; marks them delivered",
+          "kind": "reads",
+          "tech": "pgx (LISTEN/NOTIFY on state change)",
+          "to": "cloudwatchr/alert-state-db"
+        },
+        {
+          "desc": "Posts alert messages to the configured Slack channels",
+          "kind": "uses",
+          "tech": "Slack Incoming Webhooks",
+          "to": "ext/slack"
+        },
+        {
+          "desc": "Opens/resolves incidents for high-severity budget breaches",
+          "kind": "uses",
+          "tech": "PagerDuty Events API v2",
+          "to": "ext/pagerduty"
+        }
+      ],
+      "source_path": "docs/containers/notifier.md",
+      "source_repo": "dewrich/cloudwatchr",
+      "system": "cloudwatchr",
+      "tags": [
+        "http",
+        "delivery",
+        "alerting"
+      ],
+      "tech": "Go 1.23 / Fiber (webhook receiver) + worker (delivery)"
+    },
+    {
+      "doc_path": "contracts/alert-state-db.md",
+      "id": "cloudwatchr/alert-state-db",
+      "kind": "contract",
+      "name": "Alert State DB",
+      "owner": "observability-eng",
+      "relations": [],
+      "source_path": "docs/contracts/alert-state-db.md",
+      "source_repo": "dewrich/cloudwatchr",
+      "subkind": "db",
+      "system": "cloudwatchr",
+      "tags": [
+        "postgres",
+        "system-of-record"
+      ],
+      "tech": "PostgreSQL 16 / Amazon RDS"
+    },
+    {
+      "doc_path": "externals/aws-cognito.md",
+      "id": "ext/aws-cognito",
+      "kind": "external",
+      "name": "AWS Cognito",
+      "owner": "external",
+      "relations": [],
+      "source_path": "docs/externals/aws-cognito.md",
+      "source_repo": "dewrich/cloudwatchr",
+      "system": "cloudwatchr",
+      "tags": [
+        "aws",
+        "identity",
+        "oidc"
+      ],
+      "tech": "Amazon Cognito user pool (OIDC / client-credentials)"
+    },
+    {
+      "doc_path": "externals/cloudledger-costs-api.md",
+      "id": "ext/cloudledger-costs-api",
+      "kind": "external",
+      "links": {
+        "container": "https://github.com/dewrich/cloudledger/blob/main/docs/containers/inventory-api.md",
+        "openapi": "https://github.com/dewrich/cloudledger/blob/main/api/openapi/costs/v1/api-spec.yml",
+        "repo": "https://github.com/dewrich/cloudledger"
+      },
+      "name": "CloudLedger Costs API",
+      "owner": "platform-eng",
+      "relations": [],
+      "source_path": "docs/externals/cloudledger-costs-api.md",
+      "source_repo": "dewrich/cloudwatchr",
+      "system": "cloudwatchr",
+      "tags": [
+        "finops",
+        "cost",
+        "cross-repo",
+        "upstream"
+      ],
+      "tech": "CloudLedger Inventory API — Costs domain (Go/Fiber, OpenAPI-first)"
+    },
+    {
+      "doc_path": "externals/pagerduty.md",
+      "id": "ext/pagerduty",
+      "kind": "external",
+      "name": "PagerDuty",
+      "owner": "external",
+      "relations": [],
+      "source_path": "docs/externals/pagerduty.md",
+      "source_repo": "dewrich/cloudwatchr",
+      "system": "cloudwatchr",
+      "tags": [
+        "notification",
+        "on-call",
+        "incident"
+      ],
+      "tech": "PagerDuty Events API v2"
+    },
+    {
+      "doc_path": "externals/slack.md",
+      "id": "ext/slack",
+      "kind": "external",
+      "name": "Slack",
+      "owner": "external",
+      "relations": [],
+      "source_path": "docs/externals/slack.md",
+      "source_repo": "dewrich/cloudwatchr",
+      "system": "cloudwatchr",
+      "tags": [
+        "notification",
+        "chatops"
+      ],
+      "tech": "Slack Incoming Webhooks"
+    }
+  ]
+}

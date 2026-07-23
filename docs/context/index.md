@@ -6,12 +6,6 @@ system: cloudledger
 owner: platform-eng
 tags: [aws, inventory, finops, batch]
 relations: []          # system relations are derived from its containers' edges
-consumers:             # downstream systems that read this one (reciprocal, cross-repo edges)
-  - system: cloudwatchr
-    via: cloudledger/inventory-api   # Costs domain
-    kind: reads
-    desc: Reads the Costs API to alert when spend crosses budget thresholds
-    repo: https://github.com/dewrich/cloudwatchr
 ---
 
 # CloudLedger — system (C4 L1 Context)

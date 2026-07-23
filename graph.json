@@ -1,0 +1,368 @@
+{
+  "schema_version": "1",
+  "repo": "dewrich/cloudledger",
+  "system": "cloudledger",
+  "nodes": [
+    {
+      "doc_path": "context/index.md",
+      "id": "cloudledger",
+      "kind": "system",
+      "name": "CloudLedger",
+      "owner": "platform-eng",
+      "relations": [],
+      "source_path": "docs/context/index.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "aws",
+        "inventory",
+        "finops",
+        "batch"
+      ]
+    },
+    {
+      "doc_path": "containers/collector.md",
+      "id": "cloudledger/collector",
+      "kind": "container",
+      "links": {
+        "dbml": "../reference/schema.dbml"
+      },
+      "name": "Collector",
+      "owner": "platform-eng",
+      "relations": [
+        {
+          "desc": "Upserts collected resources and cost rows; one transaction per account/region sweep",
+          "kind": "writes",
+          "tech": "pgx / COPY + ON CONFLICT",
+          "to": "cloudledger/inventory-db"
+        }
+      ],
+      "source_path": "docs/containers/collector.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "cli",
+        "batch",
+        "aws"
+      ],
+      "tech": "Go 1.23 / AWS SDK for Go v2 / ECS Scheduled Task (EventBridge cron)"
+    },
+    {
+      "doc_path": "containers/inventory-api.md",
+      "id": "cloudledger/inventory-api",
+      "kind": "container",
+      "links": {
+        "openapi": "../../api/openapi/resources/v1/api-spec.yml"
+      },
+      "name": "Inventory API",
+      "owner": "platform-eng",
+      "relations": [
+        {
+          "desc": "Serves inventory and cost queries; read-only against the system-of-record",
+          "kind": "reads",
+          "tech": "pgx (read replica)",
+          "to": "cloudledger/inventory-db"
+        },
+        {
+          "desc": "Validates the caller's bearer token (JWT) against the Cognito JWKS before serving",
+          "kind": "uses",
+          "tech": "Cognito user-pool OIDC (JWKS)",
+          "to": "ext/aws-cognito"
+        }
+      ],
+      "source_path": "docs/containers/inventory-api.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "http",
+        "api",
+        "openapi"
+      ],
+      "tech": "Go 1.23 / Fiber / oapi-codegen (OpenAPI-first Go API framework)"
+    },
+    {
+      "doc_path": "containers/mobile-ui.md",
+      "id": "cloudledger/mobile-ui",
+      "kind": "container",
+      "name": "Mobile UI",
+      "owner": "platform-eng",
+      "relations": [
+        {
+          "desc": "Fetches inventory and cost views over HTTPS (intra-system container edge)",
+          "kind": "uses",
+          "tech": "REST / fetch + TanStack Query",
+          "to": "cloudledger/inventory-api"
+        },
+        {
+          "desc": "Signs the operator in and obtains the bearer token sent to the Inventory API",
+          "kind": "uses",
+          "tech": "Cognito Hosted UI (OAuth 2.0 / PKCE)",
+          "to": "ext/aws-cognito"
+        }
+      ],
+      "source_path": "docs/containers/mobile-ui.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "mobile",
+        "react-native",
+        "ui"
+      ],
+      "tech": "React Native / Expo / TypeScript"
+    },
+    {
+      "doc_path": "containers/service.md",
+      "id": "cloudledger/service",
+      "kind": "container",
+      "name": "Service",
+      "owner": "TODO",
+      "relations": [],
+      "source_path": "docs/containers/service.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [],
+      "tech": "TODO"
+    },
+    {
+      "doc_path": "components/collector/cost-collector.md",
+      "id": "cloudledger/collector/cost-collector",
+      "kind": "component",
+      "name": "Cost Collector",
+      "owner": "platform-eng",
+      "parent": "cloudledger/collector",
+      "relations": [
+        {
+          "desc": "Pulls GetCostAndUsage grouped by SERVICE and LINKED_ACCOUNT, daily granularity",
+          "kind": "reads",
+          "tech": "ce:GetCostAndUsage (read-only)",
+          "to": "ext/aws-cost-explorer"
+        }
+      ],
+      "source_path": "docs/components/collector/cost-collector.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "aws",
+        "finops",
+        "cost"
+      ],
+      "tech": "Go / AWS SDK for Go v2 (costexplorer)"
+    },
+    {
+      "doc_path": "components/collector/ec2-collector.md",
+      "id": "cloudledger/collector/ec2-collector",
+      "kind": "component",
+      "name": "EC2 Collector",
+      "owner": "platform-eng",
+      "parent": "cloudledger/collector",
+      "relations": [
+        {
+          "desc": "Paginates DescribeInstances / DescribeVolumes / DescribeImages per region",
+          "kind": "reads",
+          "tech": "ec2:Describe* (read-only)",
+          "to": "ext/aws-ec2"
+        }
+      ],
+      "source_path": "docs/components/collector/ec2-collector.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "aws",
+        "compute"
+      ],
+      "tech": "Go / AWS SDK for Go v2 (ec2)"
+    },
+    {
+      "doc_path": "components/collector/lambda-collector.md",
+      "id": "cloudledger/collector/lambda-collector",
+      "kind": "component",
+      "name": "Lambda Collector",
+      "owner": "platform-eng",
+      "parent": "cloudledger/collector",
+      "relations": [
+        {
+          "desc": "Paginates ListFunctions and reads per-function configuration per region",
+          "kind": "reads",
+          "tech": "lambda:List*/Get* (read-only)",
+          "to": "ext/aws-lambda"
+        }
+      ],
+      "source_path": "docs/components/collector/lambda-collector.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "aws",
+        "compute",
+        "serverless"
+      ],
+      "tech": "Go / AWS SDK for Go v2 (lambda)"
+    },
+    {
+      "doc_path": "components/collector/rds-collector.md",
+      "id": "cloudledger/collector/rds-collector",
+      "kind": "component",
+      "name": "RDS Collector",
+      "owner": "platform-eng",
+      "parent": "cloudledger/collector",
+      "relations": [
+        {
+          "desc": "Paginates DescribeDBInstances / DescribeDBClusters per region",
+          "kind": "reads",
+          "tech": "rds:Describe* (read-only)",
+          "to": "ext/aws-rds"
+        }
+      ],
+      "source_path": "docs/components/collector/rds-collector.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "aws",
+        "database"
+      ],
+      "tech": "Go / AWS SDK for Go v2 (rds)"
+    },
+    {
+      "doc_path": "components/collector/s3-collector.md",
+      "id": "cloudledger/collector/s3-collector",
+      "kind": "component",
+      "name": "S3 Collector",
+      "owner": "platform-eng",
+      "parent": "cloudledger/collector",
+      "relations": [
+        {
+          "desc": "Lists buckets, resolves region/encryption/policy; pulls size \u0026 object count from CloudWatch",
+          "kind": "reads",
+          "tech": "s3:List*/Get* + cloudwatch:GetMetricData (read-only)",
+          "to": "ext/aws-s3"
+        }
+      ],
+      "source_path": "docs/components/collector/s3-collector.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "aws",
+        "storage"
+      ],
+      "tech": "Go / AWS SDK for Go v2 (s3, cloudwatch)"
+    },
+    {
+      "doc_path": "contracts/inventory-db.md",
+      "id": "cloudledger/inventory-db",
+      "kind": "contract",
+      "links": {
+        "dbml": "../reference/schema.dbml"
+      },
+      "name": "Inventory DB",
+      "owner": "platform-eng",
+      "relations": [],
+      "source_path": "docs/contracts/inventory-db.md",
+      "source_repo": "dewrich/cloudledger",
+      "subkind": "db",
+      "system": "cloudledger",
+      "tags": [
+        "postgres",
+        "system-of-record"
+      ],
+      "tech": "PostgreSQL 16 / Amazon RDS (Multi-AZ, one read replica)"
+    },
+    {
+      "doc_path": "externals/aws-cognito.md",
+      "id": "ext/aws-cognito",
+      "kind": "external",
+      "name": "AWS Cognito",
+      "owner": "external",
+      "relations": [],
+      "source_path": "docs/externals/aws-cognito.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "aws",
+        "auth",
+        "identity"
+      ],
+      "tech": "Amazon Cognito user pool (OIDC / OAuth 2.0)"
+    },
+    {
+      "doc_path": "externals/aws-cost-explorer.md",
+      "id": "ext/aws-cost-explorer",
+      "kind": "external",
+      "name": "AWS Cost Explorer",
+      "owner": "external",
+      "relations": [],
+      "source_path": "docs/externals/aws-cost-explorer.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "aws",
+        "finops",
+        "cost"
+      ],
+      "tech": "AWS Cost Explorer API (Cost \u0026 Usage data)"
+    },
+    {
+      "doc_path": "externals/aws-ec2.md",
+      "id": "ext/aws-ec2",
+      "kind": "external",
+      "name": "AWS EC2 API",
+      "owner": "external",
+      "relations": [],
+      "source_path": "docs/externals/aws-ec2.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "aws",
+        "compute"
+      ],
+      "tech": "AWS EC2 control-plane API"
+    },
+    {
+      "doc_path": "externals/aws-lambda.md",
+      "id": "ext/aws-lambda",
+      "kind": "external",
+      "name": "AWS Lambda API",
+      "owner": "external",
+      "relations": [],
+      "source_path": "docs/externals/aws-lambda.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "aws",
+        "compute",
+        "serverless"
+      ],
+      "tech": "AWS Lambda control-plane API"
+    },
+    {
+      "doc_path": "externals/aws-rds.md",
+      "id": "ext/aws-rds",
+      "kind": "external",
+      "name": "AWS RDS API",
+      "owner": "external",
+      "relations": [],
+      "source_path": "docs/externals/aws-rds.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "aws",
+        "database"
+      ],
+      "tech": "AWS RDS control-plane API"
+    },
+    {
+      "doc_path": "externals/aws-s3.md",
+      "id": "ext/aws-s3",
+      "kind": "external",
+      "name": "AWS S3 API",
+      "owner": "external",
+      "relations": [],
+      "source_path": "docs/externals/aws-s3.md",
+      "source_repo": "dewrich/cloudledger",
+      "system": "cloudledger",
+      "tags": [
+        "aws",
+        "storage"
+      ],
+      "tech": "AWS S3 API + CloudWatch metrics"
+    }
+  ]
+}
