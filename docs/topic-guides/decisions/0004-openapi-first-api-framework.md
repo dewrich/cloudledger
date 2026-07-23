@@ -17,8 +17,8 @@ Build the [Inventory API](../../containers/inventory-api.md) to that framework's
 
 ## Consequences
 
-- **Spec-first** — the [resources](../../api/openapi/resources/v1/api-spec.yml) and
-  [costs](../../api/openapi/costs/v1/api-spec.yml) specs are the reviewable artifact now, and
+- **Spec-first** — the [resources](../../../api/openapi/resources/v1/api-spec.yml) and
+  [costs](../../../api/openapi/costs/v1/api-spec.yml) specs are the reviewable artifact now, and
   become the codegen input later; server and client cannot drift from them.
 - **Consistency with the org** — same tooling, gates (`redocly lint`, `oasdiff` for breaking
   changes), and idioms as the rest of our Go services, so no new framework to learn.
